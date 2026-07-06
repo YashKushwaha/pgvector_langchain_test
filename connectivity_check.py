@@ -16,4 +16,11 @@ CONNECTION_STRING = (
 
 from langchain_postgres import PGEngine
 
-pg_engine = PGEngine.from_connection_string(url=CONNECTION_STRING)
+from sqlalchemy.ext.asyncio import create_async_engine
+
+# Create an SQLAlchemy Async Engine
+engine = create_async_engine(
+    CONNECTION_STRING,
+)
+
+pg_engine = PGEngine.from_engine(engine=engine)
