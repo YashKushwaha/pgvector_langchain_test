@@ -1,0 +1,17 @@
+services:
+  postgres:
+    image: pgvector/pgvector:0.8.5-pg18-trixie
+
+    ports:
+      - "5433:5432"
+
+    environment:
+      POSTGRES_DB: myapp
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+    volumes:
+      - pg_data:/var/lib/postgresql
+
+volumes:
+  pg_data:
