@@ -1,13 +1,29 @@
 ## https://docs.langchain.com/oss/python/integrations/vectorstores/pgvectorstore
 
-# @title Set your values or use the defaults to connect to Docker { display-mode: "form" }
-POSTGRES_USER = "postgres"  # @param {type: "string"}
-POSTGRES_PASSWORD = "mysecretpassword"  # @param {type: "string"}
-POSTGRES_HOST = "localhost"  # @param {type: "string"}
-POSTGRES_PORT = "5433"  # @param {type: "string"}
-POSTGRES_DB = "postgres"  # @param {type: "string"}
-TABLE_NAME = "vectorstore"  # @param {type: "string"}
-VECTOR_SIZE = 1024  # @param {type: "int"}
+
+import os
+import uuid
+import asyncio
+
+from dotenv import load_dotenv
+
+from langchain_postgres import PGEngine
+from langchain_core.embeddings import DeterministicFakeEmbedding
+from langchain_postgres import PGVectorStore
+from langchain_core.documents import Document
+from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy import text
+
+load_dotenv()
+
+
+POSTGRES_USER = os.environ.get('POSTGRES_USER')  # @param {type: "string"}
+POSTGRES_PASSWORD = os.environ.get('POSTGRES_PASSWORD')  # @param {type: "string"}
+POSTGRES_HOST = os.environ.get('POSTGRES_HOST')  # @param {type: "string"}
+POSTGRES_PORT = os.environ.get('POSTGRES_PORT')  # @param {type: "string"}
+POSTGRES_DB = os.environ.get('POSTGRES_DB')  # @param {type: "string"}
+TABLE_NAME = os.environ.get('TABLE_NAME')  # @param {type: "string"}
+VECTOR_SIZE = int(os.environ.get('VECTOR_SIZE'))  # @param {type: "int"}
 
 SCHEMA_NAME="my_schema"
 
@@ -18,27 +34,11 @@ CONNECTION_STRING = (
 )
 # To use psycopg3 driver, set your connection string to `postgresql+psycopg://`
 
-from langchain_postgres import PGEngine
-
-from sqlalchemy.ext.asyncio import create_async_engine
-
 # Create an SQLAlchemy Async Engine
-engine = create_async_engine(
-    CONNECTION_STRING,
-)
+engine = create_async_engine(CONNECTION_STRING)
 
 pg_engine = PGEngine.from_engine(engine=engine)
-
-import asyncio
-from langchain_core.embeddings import DeterministicFakeEmbedding
-
 embeddings = DeterministicFakeEmbedding(size=768)
-
-from langchain_postgres import PGVectorStore
-
-import uuid
-
-from langchain_core.documents import Document
 
 docs = [
     Document(
@@ -58,16 +58,35 @@ docs = [
     ),
 ]
 
+async def check_table_exists(engine, table_name):
+    query = text("""
+        SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.tables
+            WHERE table_name = :table_name
+        )
+    """)
 
+    async with pg_engine._pool.connect() as conn:
+        result = await conn.execute(
+            query,
+            {"table_name": table_name},
+        )
+
+        exists = result.scalar()
+
+    if not exists:
+        await pg_engine.ainit_vectorstore_table(
+            table_name=table_name,
+            vector_size=int(os.environ.get('VECTOR_SIZE', 768)) ,
+        )
+
+    return True
 
 async def main():
-    # x = await pg_engine.ainit_vectorstore_table(
-    #     table_name=TABLE_NAME,
-    #     vector_size=768,
-    #     #schema_name=SCHEMA_NAME,    # Default: "public"
-    # )
+    x = await check_table_exists(pg_engine, TABLE_NAME)
 
-    # print(x)
+    print(x)
 
     store = await PGVectorStore.create(
         engine=pg_engine,
